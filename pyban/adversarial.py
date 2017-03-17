@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import gamma
+import math
 
 
 class Policy(object):
@@ -44,41 +45,56 @@ class Random(Policy):
 
 
 class BetaThompson(Policy):
-    def __init__(self, n):
+    def __init__(self, n, gamma_const):
         assert(n==2) #only supports 2 bandits for now ...
         super(BetaThompson, self).__init__()
+        self.gamma_const = gamma_const
+        self.n = n
         self.beta_paras = np.ones((n, 2))
         a, b, c, d = self.beta_paras.ravel()
         self.name = "AdversarialBetaThompson"
         self.pxy_t = gamma(a+b) * gamma(a+c) / (gamma(a+b+c) * gamma(a))
-
-    def h(self):
-        a, b, c, d = self.beta_paras.astype(int).ravel()
-
-        return gamma(a+c) * gamma(b+d) * gamma(a+b) * gamma(c+d) / \
-               (gamma(a) + gamma(b) + gamma(c) + gamma(d) + gamma(a+b+c+d))
+        self.h_t = 1.0 / 6
 
     def play(self, bandits):
         return np.argmax([np.random.beta(par[0]//1, par[1]//1) for par in self.beta_paras])
 
     def observe(self, reward, i):
         a, b, c, d = self.beta_paras.ravel()
-        if i == 0:
-            if reward == 1: #a++
-                self.beta_paras[i][0] += 1# * self.pxy_t
-                test = self.h()/float(a)
-                self.pxy_t += self.h()/float(a)
-            else:           #b++
-                self.beta_paras[i][1] += 1# * self.pxy_t
-                self.pxy_t -= self.h()/float(b)
-        else:
-            if reward == 1: #c++
-                self.beta_paras[i][0] += 1# * (1-self.pxy_t)
-                self.pxy_t -= self.h()/float(c)
-            else:           #d++
-                self.beta_paras[i][1] += 1# * (1-self.pxy_t)
-                self.pxy_t += self.h()/float(d)
+        a_, b_, c_, d_ = self.beta_paras.astype(int).ravel()
         self.rewards.append(reward)
+        if i == 0:
+            p = self.gamma_const / float(self.n) + (1-self.gamma_const) * self.pxy_t
+            if reward == 1: #a++
+                new_a = self.beta_paras[i][0] + math.sqrt(self.gamma_const * reward / (float(self.n) * p))
+                #new_a = self.beta_paras[i][0] + reward / self.pxy_t * self.gamma_const / float(self.n)
+                self.beta_paras[i][0] = new_a
+                if new_a - a > 1.0:
+                    self.h_t *= (a_ * c_) * (a_ * b_) / ((a_) * a_ * (b_ + c_ + d_))
+                    self.pxy_t += self.h_t / float(a_)
+            else:           #b++
+                new_b = self.beta_paras[i][1] + math.sqrt(self.gamma_const * (1-reward) / (float(self.n) * p))
+                #new_b = self.beta_paras[i][1] + (1-reward) / self.pxy_t * self.gamma_const / float(self.n)
+                self.beta_paras[i][1] = new_b
+                if new_b - b > 1.0:
+                    self.h_t *= (b_ * d_) * (a_ * b_) / ((b_) * b_ * (a_ + c_ + d_))
+                    self.pxy_t -= self.h_t / float(b_)
+        else:
+            p = self.gamma_const / float(self.n) + (1-self.gamma_const) * (1-self.pxy_t)
+            if reward == 1: #c++
+                new_c = self.beta_paras[i][0] + math.sqrt(self.gamma_const * reward / (float(self.n) * p))
+                #new_c = self.beta_paras[i][0] + reward / self.pxy_t * self.gamma_const / float(self.n)
+                self.beta_paras[i][0] = new_c
+                if new_c - c > 1.0:
+                    self.h_t *= (a_ * c_) * (c_ * d_) / ((c_) * c_ * (a_ + b_ + d_))
+                    self.pxy_t -= self.h_t / float(c_)
+            else:           #d++
+                new_d = self.beta_paras[i][1] + math.sqrt(self.gamma_const * (1-reward) / (float(self.n) * p))
+                #new_d = self.beta_paras[i][1] + (1-reward) / self.pxy_t * self.gamma_const / float(self.n)
+                self.beta_paras[i][1] = new_d
+                if new_d - d > 1.0:
+                    self.h_t *= (b_ * d_) * (c_ * d_) / ((d_) * d_ * (a_ + b_ + c_))
+                    self.pxy_t -= self.h_t / float(d_)
 
 
 class Exp3(Policy):
