@@ -7,7 +7,7 @@ class Policy(object):
     def __init__(self):
         self.rewards = []
 
-
+# Plays the bandit with the highest mean
 class OracleBest(Policy):
     def __init__(self):
         super(OracleBest, self).__init__()
@@ -19,7 +19,7 @@ class OracleBest(Policy):
     def observe(self, reward, i):
         self.rewards.append(reward)
 
-
+# Plays the bandit with the lowest mean
 class OracleWorst(Policy):
     def __init__(self):
         super(OracleWorst, self).__init__()
@@ -96,7 +96,9 @@ class BetaThompson(Policy):
                     self.h_t *= (b_ * d_) * (c_ * d_) / ((d_) * d_ * (a_ + b_ + c_))
                     self.pxy_t -= self.h_t / float(d_)
 
-
+# The non-stochastic multi-armed bandit problem
+# by P. Auer et al.
+# https://cseweb.ucsd.edu/~yfreund/papers/bandits.pdf
 class Exp3(Policy):
     def __init__(self, n, gamma):
         super(Exp3, self).__init__()
@@ -113,6 +115,31 @@ class Exp3(Policy):
     def observe(self, reward, i):
         reward_ = reward / self.p_i[i]
         self.rewards.append(reward)
-        test = self.gamma * reward_ / float(self.n)
         self.weights[i] *= np.exp(self.gamma * reward_ / float(self.n))
 
+# Explore no more: Improved high-probability regret
+#   bounds for non-stochastic bandits
+# by Gergely Neu
+# https://arxiv.org/pdf/1506.03271.pdf
+# Idea: a time dependent gamma
+class Exp3_IX(Policy):
+    def __init__(self, n):
+        super(Exp3_IX, self).__init__()
+        self.weights = np.ones((n, 1))
+        self.t = 1
+        self.name = "AdversarialExp3_IX"
+        self.p_i = []
+        self.n = n
+
+    def __gamma__(self):
+        return math.sqrt(math.log(self.n) / (self.n * self.t))
+
+    def play(self, bandits):
+        self.p_i = [(w_j / np.sum(self.weights))[0] for w_j in self.weights]
+        return np.random.choice(range(self.n), 1, p=self.p_i)[0]
+
+    def observe(self, reward, i):
+        loss = (1 - reward) / (self.p_i[i] + self.__gamma__())
+        self.rewards.append(reward)
+        self.weights[i] *= np.exp(-2 * self.__gamma__() * loss)
+        self.t += 1
