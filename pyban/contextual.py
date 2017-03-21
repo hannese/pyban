@@ -13,8 +13,8 @@ class OracleBest(Policy):
         super(OracleBest, self).__init__()
         self.name = "ContextualOracleBest"
 
-    def play(self, bandits):
-        return np.argmax([b.mean for b in bandits])
+    def play(self, bandits, x):
+        return np.argmax([b.mf(x) for b in bandits])
 
     def observe(self, reward, i):
         self.rewards.append(reward)
@@ -25,8 +25,8 @@ class OracleWorst(Policy):
         super(OracleWorst, self).__init__()
         self.name = "ContextualOracleWorst"
 
-    def play(self, bandits):
-        return np.argmin([b.mean for b in bandits])
+    def play(self, bandits, x):
+        return np.argmin([b.mf(x) for b in bandits])
 
     def observe(self, reward, i):
         self.rewards.append(reward)
@@ -37,7 +37,7 @@ class Random(Policy):
         super(Random, self).__init__()
         self.name = "Random"
 
-    def play(self, bandits):
+    def play(self, bandits, x):
         return np.random.randint(0, len(bandits))
 
     def observe(self, reward, i):
@@ -62,7 +62,7 @@ class GP_UCB(Policy):
     def __beta__(self):
         return 2. * math.log(math.fabs(self.Xk.shape[1]) * self.t ** 2 * math.pi ** 2 / (6 * self.delta))
 
-    def play(self, x):
+    def play(self, bandits, x):
         if self.t < self.n * 10:
             idx = (self.n * 10) % self.t
             self.d = x.shape[0]
